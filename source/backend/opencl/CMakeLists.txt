@@ -1,6 +1,6 @@
 #add_custom_command(OUTPUT "${CMAKE_CURRENT_LIST_DIR}/execution/cl/opencl_program.cc"
 #    COMMAND ${PYTHON_EXECUTABLE}
-#    "${CMAKE_CURRENT_LIST_DIR}/execution/cl/opencl_codegen.py"
+#    "${CMAKE_CURRENT_LIST_DIR}/execution/cl/opencl_codegen_old.py"
 #    "${CMAKE_CURRENT_LIST_DIR}/execution/cl/"
 #    "${CMAKE_CURRENT_LIST_DIR}/execution/cl/opencl_program.cc"
 #    COMMENT "OpenCL Code Generation"

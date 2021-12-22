@@ -61,6 +61,7 @@ public:
     uint32_t deviceComputeUnits() const;
     uint32_t maxFreq() const;
     uint64_t getMaxWorkGroupSize(const ::cl::Kernel &kernel);
+    uint64_t* getMaxGlobalWorkSize (const ::cl::Kernel &kernel);
     uint64_t GetKernelWaveSize(const cl::Kernel &kernel);
     std::vector<uint32_t> getMaxWorkItemSizes();
     uint64_t getMaxLocalMem() const;
