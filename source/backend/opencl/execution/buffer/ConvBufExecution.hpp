@@ -35,7 +35,7 @@ protected:
 
 class ConvBufExecution : public ConvBufCommonExecution {
 public:
-    ConvBufExecution(const std::vector<Tensor *> &inputs, const std::vector<Tensor *> &outputs, const MNN::Op *op, Backend *backend);
+    ConvBufExecution(const std::vector<Tensor *> &inputs, const std::vector<Tensor *> &outputs, const Op* op, Backend *backend);
     virtual ~ConvBufExecution();
 
     virtual ErrorCode onResize(const std::vector<Tensor *> &inputs, const std::vector<Tensor *> &outputs) override;

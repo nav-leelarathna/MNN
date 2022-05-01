@@ -114,6 +114,7 @@ Variable::Info* Expr::outputInfo(int index) const {
 }
 
 void Expr::_addLinkForInputs(EXPRP expr) {
+//    MNN_PRINT("Expr.cpp, _addLinkForInputs");
     auto inputs = expr->inputs();
     for (int i=0; i<inputs.size(); ++i) {
         bool findEmpty = false;
@@ -186,6 +187,7 @@ EXPRP Expr::create(Variable::Info&& info, const void* ptr, VARP::InputType type,
     return expr;
 }
 EXPRP Expr::create(std::shared_ptr<BufferStorage> extra, std::vector<VARP>&& inputs, int outputSize) {
+//    MNN_PRINT("Expr.cpp,  Expr::create 2");
     EXPRP expr(new Expr(outputSize));
     expr->mStorage = extra;
     expr->mOp = flatbuffers::GetRoot<Op>(extra->buffer());
@@ -196,6 +198,7 @@ EXPRP Expr::create(std::shared_ptr<BufferStorage> extra, std::vector<VARP>&& inp
 }
 
 EXPRP Expr::create(const OpT* op, std::vector<VARP> inputs, int outputSize) {
+//    MNN_PRINT("Expr.cpp, Expr::create");
     if (OpType_Input == op->type) {
         Variable::Info info;
         info.dim = op->main.AsInput()->dims;
@@ -321,6 +324,7 @@ const std::vector<WeakEXPRP>& Variable::toExprs() const {
 }
 
 VARP Variable::create(EXPRP expr, int index) {
+//    MNN_PRINT("Expr.cpp,  Variable::create");
     VARP res(new Variable(expr, index));
 #ifdef MNN_EXPR_SHAPE_EAGER
     auto info = expr->requireInfo();

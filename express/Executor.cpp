@@ -232,8 +232,6 @@ static void writeCacheFile(std::shared_ptr<Executor::Cache> cache, std::pair<con
     }
 }
 
-
-
 Executor::RuntimeManager::RuntimeManager(std::vector<ScheduleConfig> &configs) {
     mRuntime = Interpreter::createRuntime(configs);
     mInfo = mRuntime.first.begin()->second;

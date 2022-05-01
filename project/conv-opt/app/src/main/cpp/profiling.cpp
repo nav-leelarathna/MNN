@@ -576,10 +576,7 @@ uint32_t LPT  = ((TSK*TSM)/(RTSM*RTSN)); // The loads-per-thread for a tile
     int warmup_step = 10, hot_runs = 50, last_runs = 5, overall_runs = 2;
     int total_runs = warmup_step + hot_runs + last_runs;
     std::vector<cl::Event> events;
-
-
     for (int k = 0; k < overall_runs; k++) {
-
 //        for (int i = 0; i < total_runs; i++) {
 //            if (i>=hot_runs && i < warmup_step + hot_runs) {
 //                cl::Event event;

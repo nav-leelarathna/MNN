@@ -270,12 +270,14 @@ public:
         return mParameter;
     }
     virtual std::vector<VARP> onForward(const std::vector<VARP>& inputs) override {
+//        MNN_PRINT("NN.cpp,  onForward");
         auto input = inputs[0];
         auto& option = mParameter.option;
         if (getIsTraining()) {
             auto tempOutput = _Conv(mParameter.weight, mParameter.bias, _Convert(input, NC4HW4), option.padMode, option.stride, option.dilate, mParameter.group, mParameter.option.pads);
             tempOutput->setName(name());
             tempOutput = _activate(tempOutput, option.fusedActivationFunction);
+//            MNN_PRINT("NN.cp, output calculated.");
             return {tempOutput};
         }
         bool relu = option.fusedActivationFunction == NN::Relu;

@@ -1,9 +1,6 @@
 //#include "../../../../../../../../Android/Sdk/ndk/21.1.6352462/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/9.0.8/include/opencl-c.h"
 // First naive implementation
-
 #define KERNEL 4
-
-
 #if KERNEL == 1
 
 __kernel void gemm1(const int M, const int N, const int K,
@@ -103,7 +100,7 @@ __kernel void gemm2(const int M, const int N, const int K,
 
 // Increased the amount of work-per-thread by a factor WPT
 __kernel void gemm3(const int M, const int N, const int K,
-                      const __global float* A,
+                      const __global float* A,f
                       const __global float* B,
                       __global float* C,
                       const int numTiles) {
@@ -161,9 +158,6 @@ __kernel void gemm3(const int M, const int N, const int K,
         // Synchronise before loading the next tile
         barrier(CLK_LOCAL_MEM_FENCE);
     }
-
-
-
     // Store the final results in C
     for (int w=0; w<WPT; w++) {
         C[(globalCol + w*RTS)*M + globalRow] = acc[w];

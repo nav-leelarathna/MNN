@@ -130,8 +130,10 @@ void GeometryConvUtils::im2Col3d(Tensor* im2Col, Tensor* input, int ic, int kd, 
         }
     }
 }
+
 void GeometryConvUtils::im2Col(Tensor* im2Col, Tensor* input, int ic, int kh, int kw, int batch, int oh, int ow, int ih,
                                int iw, int sh, int sw, int dh, int dw, std::pair<int, int> pads, int srcKernelOffset, Tensor* padVal) {
+    MNN_PRINT("Entering im2Col");
     im2Col->buffer().type       = halide_type_of<float>();
     im2Col->buffer().dimensions = 2;
     im2Col->setLength(0, ic * kw * kh);
@@ -141,6 +143,7 @@ void GeometryConvUtils::im2Col(Tensor* im2Col, Tensor* input, int ic, int kh, in
     des->memoryType      = Tensor::InsideDescribe::MEMORY_VIRTUAL;
     des->dimensionFormat = MNN_DATA_FORMAT_NCHW;
     des->regions.clear();
+    MNN_PRINT("complete setup");
     if (padVal == nullptr) {
         des->regions.reserve(batch * kw * kh);
     }
@@ -200,6 +203,7 @@ void GeometryConvUtils::im2Col(Tensor* im2Col, Tensor* input, int ic, int kh, in
                     ADD_PAD_VALUE(left, -leftPad, ohExcludePad, ow);
                     ADD_PAD_VALUE(right, owExcludePad, ohExcludePad, ow);
                 }
+//                MNN_PRINT("Setting region values");
                 Tensor::InsideDescribe::Region region;
                 region.origin        = input;
                 region.size[0]       = ic;

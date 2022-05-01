@@ -247,12 +247,15 @@ std::vector<int> Tensor::shape() const {
 template <typename T>
 void printData(const Tensor* tensor, const void* data, const char* fmt) {
     const T* buffer = (const T*)data;
+//    MNN_PRINT("Entering printData");
+
     if (tensor->dimensions() != 4) {
         auto size = tensor->elementSize();
+        MNN_PRINT("printData: size is %d",size);
+
         for (int i = 0; i < size; i++) {
             MNN_PRINT(fmt, buffer[i]);
         }
-        MNN_PRINT("\n");
         return;
     }
 
@@ -261,6 +264,7 @@ void printData(const Tensor* tensor, const void* data, const char* fmt) {
     auto channel = tensor->channel();
     auto height  = tensor->height();
     auto width   = tensor->width();
+    MNN_PRINT("%d,%d,%d,%d,",batch,channel,height,width);
 
     auto unit = sizeof(T);
     if (tf) {
@@ -271,15 +275,19 @@ void printData(const Tensor* tensor, const void* data, const char* fmt) {
         for (int b = 0; b < batch; b++) {
             auto bytes = buffer + b * bytesPerBatch / unit;
             MNN_PRINT("batch %d:\n", b);
-
+//            std::stringstream output;
             for (int h = 0; h < height; h++) {
                 for (int w = 0; w < width; w++) {
                     for (int c = 0; c < channel; c++) {
+//                        MNN_PRINT("index is %d",h * width * channel + w * channel + c);
                         MNN_PRINT(fmt, bytes[h * width * channel + w * channel + c]);
+//                        output << std::to_string(bytes[h * width * channel + w * channel + c]) << " ";
                     }
                     MNN_PRINT("\n");
                 }
                 MNN_PRINT("--------------\n");
+//                MNN_PRINT("%s",output.str().c_str());
+//                output.flush();
             }
         }
     } else if (TensorUtils::getDescribe(tensor)->dimensionFormat == MNN_DATA_FORMAT_NC4HW4) { // NC/4HW4
@@ -296,6 +304,7 @@ void printData(const Tensor* tensor, const void* data, const char* fmt) {
                 for (int h = 0; h < height; h++) {
                     for (int w = 0; w < width; w++) {
                         auto n = c / components, r = c % components;
+
                         MNN_PRINT(fmt, bytes[(n * width * height + h * width + w) * components + r]);
                     }
                     MNN_PRINT("\n");
@@ -315,6 +324,7 @@ void printData(const Tensor* tensor, const void* data, const char* fmt) {
             for (int c = 0; c < channel; c++) {
                 for (int h = 0; h < height; h++) {
                     for (int w = 0; w < width; w++) {
+//                        MNN_PRINT("%d",c * width * height + h * width + w);
                         MNN_PRINT(fmt, bytes[c * width * height + h * width + w]);
                     }
                     MNN_PRINT("\n");
@@ -336,11 +346,20 @@ void Tensor::print() const {
     auto printee = this;
     bool device  = this->buffer().host == NULL && this->buffer().device != 0;
     if (device) {
+        MNN_PRINT("converting to host");
         printee = this->createHostTensorFromDevice(this, true);
+    }
+//    MNN_PRINT("dimensions of buffer: %d", printee->buffer().dimensions);
+//    MNN_PRINT("type of buffer: %d", printee->buffer().type);
+//    MNN_PRINT("host of buffer: %d", printee->buffer().host);
+    if (printee->buffer().host == NULL){
+        MNN_PRINT("location of values buffer().host is null");
     }
     auto buffer = printee->buffer().host;
 
+
     MNN_PRINT("\nData: ");
+//    MNN_PRINT("code is %d",printee->getType().code);
     if (printee->getType().code == halide_type_int) {
         if (printee->getType().bits == 8) { // int8
             printData<int8_t>(printee, buffer, "%d, ");
@@ -358,6 +377,7 @@ void Tensor::print() const {
             MNN_PRINT("\nunsupported data type");
         }
     } else if (printee->getType().code == halide_type_float) {
+        MNN_PRINT("type is float.");
         if (printee->getType().bits == 32) { // float32
             printData<float>(printee, buffer, "%f, ");
         } else {

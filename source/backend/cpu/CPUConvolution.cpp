@@ -202,6 +202,7 @@ std::shared_ptr<CPUConvolution::ResourceInt8> CPUConvolution::makeResourceInt8(B
 
 CPUConvolution::CPUConvolution(const Convolution2DCommon *convOp, Backend *b) : MNN::Execution(b), mCommon(convOp) {
     // Do nothing
+    MNN_PRINT("CPUConvolution::CPUConvolution");
 }
 std::vector<float> CPUConvolution::getPostParameters() const {
     std::vector<float> postParameters = {

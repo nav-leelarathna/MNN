@@ -17,6 +17,7 @@ def opencl_codegen():
     if not os.path.exists(cl_kernel_dir):
         print(cl_kernel_dir + " doesn't exist!")
 
+
 #common.h
     common_header_code = ""
 #quantized_common.h

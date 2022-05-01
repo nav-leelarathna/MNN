@@ -7,13 +7,15 @@
 //
 
 #ifndef MNN_OPENCL_BUFFER_CLOSED
+#include "MNN/AutoTime.hpp"
 
 #include "ConvBufExecution.hpp"
 #include "ConvBufWinograd.hpp"
 #include "core/ConvolutionCommon.hpp"
 #include "core/Backend.hpp"
 #include "RasterBufExecution.hpp"
-
+#define LOG_VERBOSE
+#define ENABLE_OPENCL_TIME_PROFILER
 namespace MNN {
 namespace OpenCL {
 
@@ -283,7 +285,7 @@ void ConvBufExecution::_generateFilterConvertRegion(Tensor* virtualFilter, Tenso
 }
 
 
-ConvBufExecution::ConvBufExecution(const std::vector<Tensor *> &inputs, const std::vector<Tensor *> &outputs, const MNN::Op *op, Backend *backend)
+ConvBufExecution::ConvBufExecution(const std::vector<Tensor *> &inputs, const std::vector<Tensor *> &outputs, const MNN::Op* op, Backend *backend)
     : ConvBufCommonExecution(op->main_as_Convolution2D(), backend) {
 #ifdef LOG_VERBOSE
     MNN_PRINT("Start ConvExecution init !\n");
@@ -313,6 +315,8 @@ ConvBufExecution::ConvBufExecution(const std::vector<Tensor *> &inputs, const st
         std::shared_ptr<Tensor> virtualFilter(
             Tensor::createDevice<float>({ROUND_UP(mOutputChannel, 4) * ROUND_UP(mInputChannel, 4) * mKernelWidth * mKernelHeight}));
         mVirtualFilter = virtualFilter;
+        // I INSERTED HERE
+//        MNN::Op* op = nullptr;
         mRasterExe.reset(new RasterBufExecution({virtualFilter.get()}, op, mOpenCLBackend));
     } else {
         int weightSize   = 0;
@@ -347,6 +351,8 @@ ConvBufExecution::ConvBufExecution(const std::vector<Tensor *> &inputs, const st
             std::shared_ptr<Tensor> virtualFilter(
                 Tensor::createDevice<float>({ROUND_UP(mOutputChannel, 4) * ROUND_UP(mInputChannel, 4) * mKernelWidth * mKernelHeight}));
             _generateFilterConvertRegion(virtualFilter.get(), originBuffer.get());
+            // INSERTED HERE TOO
+//            MNN::Op* op = nullptr;
             std::shared_ptr<Execution> raster(new RasterBufExecution({virtualFilter.get()}, op, mOpenCLBackend));
             raster->onResize({virtualFilter.get()}, {mFilter.get()});
             raster->onExecute({virtualFilter.get()}, {mFilter.get()});
@@ -362,6 +368,7 @@ ConvBufExecution::ConvBufExecution(const std::vector<Tensor *> &inputs, const st
     mBuildOptions.emplace(std::string("-DIN_C_BLOCK=" + std::to_string(UP_DIV(mInputChannel, 4))));
 
     mKernel           = mOpenCLBackend->getOpenCLRuntime()->buildKernel("conv_2d_buf", kernelName, mBuildOptions);
+    MNN_PRINT("Kernel name is %s",kernelName.c_str());
     mMaxWorkGroupSize = static_cast<uint32_t>(mOpenCLBackend->getOpenCLRuntime()->getMaxWorkGroupSize(mKernel));
 
 #ifdef LOG_VERBOSE
@@ -444,6 +451,7 @@ ErrorCode ConvBufExecution::onResize(const std::vector<Tensor *> &inputs, const 
         for(int knl_idx = 0; knl_idx < actual_kernel; knl_idx++) {
             kernel[knl_idx]        = mOpenCLBackend->getOpenCLRuntime()->buildKernel("conv_2d_buf", kernelName[knl_idx], mBuildOptions);
             uint32_t maxWorkGroupSize = static_cast<uint32_t>(mOpenCLBackend->getOpenCLRuntime()->getMaxWorkGroupSize(kernel[knl_idx]));
+            MNN_PRINT("max work group size is %d", maxWorkGroupSize);
             
             uint32_t idx            = 0;
             
@@ -568,6 +576,7 @@ ErrorCode ConvBufExecution::onResize(const std::vector<Tensor *> &inputs, const 
         mGlobalWorkSize = {globalWorkSize[min_index][0], globalWorkSize[min_index][1]};
         
         mKernel        = mOpenCLBackend->getOpenCLRuntime()->buildKernel("conv_2d_buf", kernelName[min_index], mBuildOptions);
+
         
         uint32_t idx            = 0;
         mKernel.setArg(idx++, mGlobalWorkSize[0]);
@@ -601,17 +610,22 @@ ErrorCode ConvBufExecution::onResize(const std::vector<Tensor *> &inputs, const 
 ErrorCode ConvBufExecution::onExecute(const std::vector<Tensor *> &inputs, const std::vector<Tensor *> &outputs) {
 #ifdef LOG_VERBOSE
     MNN_PRINT("Start ConvExecution onExecute !\n");
+    MNN_PRINT("global size: (%d, %d)", mGlobalWorkSize[0],mGlobalWorkSize[1]);
+    MNN_PRINT("local size: (%d, %d)", mLocalWorkSize[0],mLocalWorkSize[1]);
 #endif
     if (inputs.size() > 1) {
         mRasterExe->onExecute({mVirtualFilter.get()}, {mFilter.get()});
     }
-
 #ifdef ENABLE_OPENCL_TIME_PROFILER
     cl::Event event;
+    Timer timer;
+    timer.reset();
+    double time = 0;
     runKernel2D(mKernel, mGlobalWorkSize, mLocalWorkSize,
                 mOpenCLBackend->getOpenCLRuntime(), &event);
-    
     int costTime = (int)mOpenCLBackend->getOpenCLRuntime()->getCostTime(&event);
+    time = timer.durationInUs();
+//    MNN_PRINT("Time taken is %f", time);
     MNN_PRINT("kernel cost:%d    us ConvBuf2D\n",costTime);
 #else
     runKernel2D(mKernel, mGlobalWorkSize, mLocalWorkSize,
@@ -645,13 +659,16 @@ public:
         }
         if (inputs.size() > 1) {
             // Multi inputs
+            // edited
             return new ConvBufExecution(inputs, outputs, op, backend);
+//            return new ConvBufExecution(inputs, outputs,op->main_as_Convolution2D() , backend);
         }
         auto conv2D = op->main_as_Convolution2D();
         if (ConvBufWinograd::valid(conv2D->common(), inputs[0])) {
             return new ConvBufWinograd(conv2D, backend);
         }
         return new ConvBufExecution(inputs, outputs, op, backend);
+//        return new ConvBufExecution(inputs, outputs, op->main_as_Convolution2D(), backend);
     }
 };
 

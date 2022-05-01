@@ -16,7 +16,12 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         // Example of a call to a native method
-        binding.sampleText.text = stringFromJNI()
+//        binding.sampleText.text = profileNN()
+//        binding.sampleText.text = profileKernel()
+//        binding.sampleText.text = benchmark()
+//        binding.sampleText.text = deviceInformation()
+        binding.sampleText.text = functionalityTest()
+//        binding.sampleText.text = testConvolution ()
 
     }
 
@@ -24,8 +29,13 @@ class MainActivity : AppCompatActivity() {
      * A native method that is implemented by the 'mnnconvolutionoptimisation' native library,
      * which is packaged with this application.
      */
-    external fun stringFromJNI(): String
-
+//    external fun stringFromJNI(): String
+    external fun profileNN(): String
+    external fun profileKernel(): String
+    external fun testConvolution(): String
+    external fun functionalityTest(): String
+    external fun benchmark(): String
+    external fun deviceInformation(): String
     companion object {
         // Used to load the 'mnnconvolutionoptimisation' library on application startup.
         init {

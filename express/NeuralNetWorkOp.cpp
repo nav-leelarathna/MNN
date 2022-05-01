@@ -124,6 +124,7 @@ VARP _InnerProduct(std::vector<float>&& weight, std::vector<float>&& bias, VARP 
 }
 
 VARP _Conv(VARP weight, VARP bias, VARP x, PaddingMode pad, INTS stride, INTS dilate, int group, INTS pads) {
+//    MNN_PRINT("NeuralNetworkOp.cpp,  _Conv");
     std::unique_ptr<OpT> convOp(new OpT);
     convOp->type = OpType_Convolution;
     auto shape   = weight->getInfo();
@@ -162,6 +163,7 @@ VARP _Conv(VARP weight, VARP bias, VARP x, PaddingMode pad, INTS stride, INTS di
     }
     return (Variable::create(Expr::create(convOp.get(), {x, weight, bias})));
 }
+
 VARP _Conv(std::vector<float>&& weight, std::vector<float>&& bias, VARP x, INTS channel, INTS kernelSize,
            PaddingMode pad, INTS stride, INTS dilate, int group, INTS pads, bool relu, bool relu6) {
     std::unique_ptr<OpT> convOp(new OpT);
