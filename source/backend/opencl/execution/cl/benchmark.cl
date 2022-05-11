@@ -3,7 +3,12 @@
 #define FETCH4(sum, id, A, jump) sum+=A[id];id+=jump;sum+=A[id];id+=jump;sum+=A[id];id+=jump;sum+=A[id];id+=jump;
 #define FETCH16(sum, id, A, jump) FETCH4(sum, id, A, jump);FETCH4(sum, id, A, jump);FETCH4(sum, id, A, jump);FETCH4(sum, id, A, jump)
 
-__kernel void bandwidth_float1(const __global float *A, __global float *B){
+__kernel void bandwidth_float0(const __global float * restrict A, __global float * restrict B){
+     size_t tid = get_global_id(0);
+     B[tid] = A[tid];
+}
+
+__kernel void bandwidth_float1(const __global float * restrict A, __global float * restrict B){
      int id = (get_group_id(0) * get_local_size(0) * FETCH_PER_WI) + get_local_id(0);
      float sum;
      int ls = get_local_size(0);
@@ -44,14 +49,16 @@ __kernel void bandwidth_float8(const __global float8 *A, __global float *B){
      B[get_global_id(0)] = sum.s0 + sum.s1 + sum.s2 + sum.s3 + sum.s4 + sum.s5 + sum.s6 + sum.s7;
 }
 
-__kernel void bandwidth_float16(const __global float16 *A, __global float *B){
+__kernel void bandwidth_float16(const __global float16 *A, __global float16 *B){
      int id = (get_group_id(0) * get_local_size(0) * FETCH_PER_WI) + get_local_id(0);
      float16 sum;
      int ls = get_local_size(0);
      for (int i = 0; i < FETCH_PER_WI/16; i++){
         FETCH16(sum, id, A, ls);
      }
-     B[get_global_id(0)] = sum.s0 + sum.s1 + sum.s2 + sum.s3 + sum.s4 + sum.s5 + sum.s6 + sum.s7 + sum.s8 + sum.s9 + sum.sa + sum.sb + sum.sc + sum.sd + sum.se + sum.sf;
+
+     B[get_global_id(0)] = sum;
+     // B[get_global_id(0)] = sum.s0 + sum.s1 + sum.s2 + sum.s3 + sum.s4 + sum.s5 + sum.s6 + sum.s7 + sum.s8 + sum.s9 + sum.sa + sum.sb + sum.sc + sum.sd + sum.se + sum.sf;
 }
 
 #define MAD4(x, y) x = mad(y, x, y); y = mad(x, y, x); x = mad(y, x, y); y = mad(x, y, x);
@@ -92,6 +99,7 @@ __kernel void compute_float8(float A, __global float *B){
         y = MAD64(x, y);
     }
     B[get_global_id(0)] = y.s0 + y.s1 + y.s2 + y.s3+y.s4 + y.s5 + y.s6 + y.s7;
+    // B[get_global_id(0)] = y;
 }
 
 __kernel void compute_float16(float A, __global float *B){

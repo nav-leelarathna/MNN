@@ -394,8 +394,5 @@ Java_com_example_mnnconvolutionoptimisation_MainActivity_testConvolution(
 //    Tensor* result = cpuMatMul(im2col, kernel2row);
 //    reshapeTensor(result, patchHeight, patchWidth);
 //    printTensor(result, patchHeight, patchWidth);
-
-
-
     return env->NewStringUTF(outputString.c_str());
 }

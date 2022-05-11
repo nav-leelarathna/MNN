@@ -19,26 +19,53 @@ void print2dArray(float * arr, int rows, int cols){
     }
 }
 
-void printBuffer(const cl::Buffer & buffer, OpenCLRuntime *runtime, int rows, int cols){
-    cl::CommandQueue commandQueue = runtime->commandQueue();
-    float output[rows][cols];
-    cl_event readEvent;
-    commandQueue.enqueueReadBuffer(buffer, CL_TRUE, 0, rows*cols*sizeof(float), output);
-    print2dArray(*output, rows, cols);
+void print2dHalfArray(cl_half * arr, int rows, int cols){
+    for (int i = 0; i < rows; i++){
+        std::stringstream toPrint;
+        for (int j = 0; j < cols; j++){
+            toPrint << std::to_string(arr[i*cols + j]) << " ";
+        }
+        MNN_PRINT("%s\n", toPrint.str().c_str());
+    }
 }
 
-float bufferDifference(const cl::Buffer & bufferA, const cl::Buffer & bufferB, OpenCLRuntime *runtime,  int rows, int cols){
+void printBuffer(const cl::Buffer & buffer, OpenCLRuntime *runtime, int rows, int cols, int kernelID){
+    cl::CommandQueue commandQueue = runtime->commandQueue();
+    float output[rows][cols];
+    cl_half output2[rows][cols];
+    cl_event readEvent;
+    commandQueue.enqueueReadBuffer(buffer, CL_TRUE, 0, rows*cols*sizeof(float), output);
+    if (kernelID == 9){
+        print2dHalfArray(*output2, rows, cols);
+    }
+    else{
+        print2dArray(*output, rows, cols);
+    }
+}
+
+float bufferDifference(const cl::Buffer & bufferA, const cl::Buffer & bufferB, OpenCLRuntime *runtime,  int rows, int cols, int kernelID){
     cl::CommandQueue commandQueue = runtime->commandQueue();
     float A[rows][cols];
     float B[rows][cols];
-    cl_event readEvent;
+    cl_half B2[rows][cols];
     commandQueue.enqueueReadBuffer(bufferA, CL_TRUE, 0, rows*cols*sizeof(float), A);
     commandQueue.enqueueReadBuffer(bufferB, CL_TRUE, 0, rows*cols*sizeof(float), B);
+    commandQueue.enqueueReadBuffer(bufferB, CL_TRUE, 0, rows*cols*sizeof(cl_half), B2);
 
-    float accumulatedError;
-    for (int i = 0 ; i < rows; i++){
-        for (int j=0; j < cols; j++){
-            accumulatedError += (A[i][j] - B[i][j]) * (A[i][j] - B[i][j]) ;
+    float accumulatedError = 0;
+    if (kernelID == 8){
+        for (int i = 0 ; i < rows; i++){
+            for (int j=0; j < cols; j++){
+                if (A[i][j] != (float)B2[i][j])
+                accumulatedError += std::abs(A[i][j] - (float)B2[i][j])  ;
+            }
+        }
+    }
+    else{
+        for (int i = 0 ; i < rows; i++){
+            for (int j=0; j < cols; j++){
+                accumulatedError += std::abs(A[i][j] - B[i][j]);
+            }
         }
     }
     return accumulatedError;
@@ -75,53 +102,80 @@ float getKernelError(int width, int kernelToTestID) {
     kernelAndLaunchParameters klp = getKernelAndLaunchParameters(0, runtime, width, width);
 
 
-    float A1[width][width];
+    // float A1[width][width];
+    float *A1 = new float[width*width];
+    cl_half *Ahalf = new cl_half[width*width];
     float A2[width][width];
     float B1[width][width];
     float B2[width][width];
+    cl_half *Bhalf = new cl_half[width*width];
     float C[width][width];
+    cl_half *Chalf = new cl_half[width*width];
     // Initialise arrays with values.
     for (int i = 0; i < width; i++) {
         for (int j = 0; j < width; j++) {
+//            int val = i * width + j;
+            float val = 0.5;
             if (i < oldWidth && j < oldWidth){
-                A1[i][j] = (float) (i * width + j) ;
-                B1[i][j] = (float) (i * width + j) + 1;
-                B2[i][j] = (float) (i * width + j) + 1;
+//                A1[i][j] = (float) (i * width + j) ;
+                A1[i*width+ j] = val ;
+                B1[i][j] =  val + 0.25;
+                B2[i][j] = val + 0.25;
+                Bhalf[i*width+j] = (cl_half) val;
 //                B[i][j] = (float) (i * width + j) + 1;
-                if (kernelToTestID == 4 or kernelToTestID == 5 or kernelToTestID == 6 or kernelToTestID == 7 or kernelToTestID == 8){
-                    A2[j][i] = (float) (i * width + j);
+                if (kernelToTestID == 4 or kernelToTestID == 5 or kernelToTestID == 6 or kernelToTestID == 7 or kernelToTestID == 8 or kernelToTestID == 9){
+                    A2[j][i] =  val;
+                    Ahalf[j*width + i] = (cl_half) val;
                 }
                 else{
-                    A2[i][j] = (float) (i * width + j) ;
+                    A2[i][j] =  val;
+                    Ahalf[i*width + j] = (cl_half) val;
                 }
                 C[i][j] = 0.0f;
+                Chalf[i*width + j] = 0;
             }
             else{
-                A1[i][j] = 0.f;
+//                A1[i][j] = 0.f;
+                A1[i*width+ j] = 0.f;
                 A2[i][j] = 0.f;
                 B1[i][j] = 0.f;
                 B2[i][j] = 0.f;
                 C[i][j] = 0.f;
+                Chalf[i*width + j] = 0;
             }
         }
     }
     cl_mem_flags flags = CL_MEM_READ_WRITE | CL_MEM_USE_HOST_PTR;
+    cl::Buffer bufferA2;
+    cl::Buffer bufferB2;
+    cl::Buffer bufferC2;
+    if (kernelToTestID == 8){
+        bufferA2 = cl::Buffer(context, flags, sizeof(cl_half)*M*K, Ahalf);
+        bufferB2 = cl::Buffer(context, flags, sizeof(cl_half)*K*N, Bhalf);
+        bufferC2 = cl::Buffer(context, flags, sizeof(cl_half)*M*N, Chalf);
+    }
+    else{
+        bufferA2 = cl::Buffer(context, flags, sizeof(float)*M*K, A2);
+        bufferB2 = cl::Buffer(context, flags, sizeof(float)*K*N, B2);
+        bufferC2 = cl::Buffer(context, flags, sizeof(float)*M*N, C);
+    }
     cl::Buffer bufferA1(context, flags, sizeof(float)*M*K, A1);
-    cl::Buffer bufferA2(context, flags, sizeof(float)*M*K, A2);
+//    cl::Buffer bufferA2(context, flags, sizeof(float)*M*K, A2);
     cl::Buffer bufferB1(context, flags, sizeof(float)*K*N, B1);
-    cl::Buffer bufferB2(context, flags, sizeof(float)*K*N, B2);
-    cl::Buffer bufferC(context, flags, sizeof(float)*M*N, C);
+//    cl::Buffer bufferB2(context, flags, sizeof(float)*K*N, B2);
+    cl::Buffer bufferC1(context, flags, sizeof(float)*M*N, C);
+//    cl::Buffer bufferC2(context, flags, sizeof(float)*M*N, C);
 
-    cl::Kernel kernel = setKernelArgs(width, width, width, bufferA1, bufferB1, bufferC, klp.kernel, runtime);
+    cl::Kernel kernel = setKernelArgs(width, width, width, bufferA1, bufferB1, bufferC1, klp.kernel, runtime);
     runKernel2D(kernel, klp.global, klp.local, runtime, nullptr);
 
     kernelAndLaunchParameters klpToTest = getKernelAndLaunchParameters(kernelToTestID, runtime, width, width);
-    cl::Buffer bufferC2(context, flags, sizeof(float)*M*N, C);
+
     cl::Kernel kernelToTest = setKernelArgs(width, width, width, bufferA2, bufferB2, bufferC2, klpToTest.kernel, runtime);
     runKernel2D(kernelToTest, klpToTest.global, klpToTest.local, runtime, nullptr);
 //    MNN_PRINT("C: ");
-//    printBuffer(bufferC2, runtime, width, width);
-    float error = bufferDifference(bufferC, bufferC2, runtime, width, width);
+//    printBuffer(bufferC1, runtime, width, width, kernelToTestID);
+    float error = bufferDifference(bufferC1, bufferC2, runtime, width, width, kernelToTestID);
     return error / (width * width);
 }
 
@@ -149,14 +203,15 @@ extern "C" JNIEXPORT jstring JNICALL Java_com_example_mnnconvolutionoptimisation
         jobject /* this */) {
     std::string hello = "Finished.";
 //    testSuite();
-//    isKernelCorrect(0, 32);
-//    isKernelCorrect(1, 32);
-//    isKernelCorrect(2, 32);
-//    isKernelCorrect(3, 32);
-//    isKernelCorrect(4, 32);
-//    isKernelCorrect(5, 32);
-//    isKernelCorrect(6, 32);
-    isKernelCorrect(7, 32);
-    isKernelCorrect(8, 32);
+    isKernelCorrect(0, 128);
+    isKernelCorrect(1, 128);
+    isKernelCorrect(2, 128);
+    isKernelCorrect(3, 128);
+    isKernelCorrect(4, 128);
+    isKernelCorrect(5, 128);
+    isKernelCorrect(6, 256);
+    isKernelCorrect(7, 128);
+    isKernelCorrect(8, 128);
+//    isKernelCorrect(9, 64);
     return env->NewStringUTF(hello.c_str());
 }

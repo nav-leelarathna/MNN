@@ -8,94 +8,48 @@ using namespace MNN;
 using namespace MNN::Express;
 using namespace MNN::OpenCL;
 
-
 #define PROFILING
 //#define LOG_VERBOSE
 
 
 void deviceInfo(void){
-    MNN_PRINT("attempting to get device info");
-    int i, j;
-    char* value;
-    size_t valueSize;
-    cl_uint platformCount;
-    cl_platform_id* platforms;
-    cl_uint deviceCount;
-    cl_device_id* devices;
-    cl_uint maxComputeUnits;
-    size_t workGroupSize;
-
-    // get all platforms
-    MNN_PRINT("getting platforms");
-    clGetPlatformIDs(0, NULL, &platformCount);
-    MNN_PRINT("Platform count: %d",platformCount);
-    platforms = (cl_platform_id*) malloc(sizeof(cl_platform_id) * platformCount);
-    clGetPlatformIDs(platformCount, platforms, NULL);
-
-    for (i = 0; i < platformCount; i++) {
-
-        // get all devices
-        clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_ALL, 0, NULL, &deviceCount);
-        devices = (cl_device_id*) malloc(sizeof(cl_device_id) * deviceCount);
-        clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_ALL, deviceCount, devices, NULL);
-
-        // for each device print critical attributes
-        for (j = 0; j < deviceCount; j++) {
-
-            // print device name
-            clGetDeviceInfo(devices[j], CL_DEVICE_NAME, 0, NULL, &valueSize);
-            value = (char*) malloc(valueSize);
-            clGetDeviceInfo(devices[j], CL_DEVICE_NAME, valueSize, value, NULL);
-
-            MNN_PRINT("%d. Device: %s\n", j+1, value);
-            free(value);
-
-            // print hardware device version
-            clGetDeviceInfo(devices[j], CL_DEVICE_VERSION, 0, NULL, &valueSize);
-            value = (char*) malloc(valueSize);
-            clGetDeviceInfo(devices[j], CL_DEVICE_VERSION, valueSize, value, NULL);
-            MNN_PRINT(" %d.%d Hardware version: %s\n", j+1, 1, value);
-            free(value);
-
-            // print software driver version
-            clGetDeviceInfo(devices[j], CL_DRIVER_VERSION, 0, NULL, &valueSize);
-            value = (char*) malloc(valueSize);
-            clGetDeviceInfo(devices[j], CL_DRIVER_VERSION, valueSize, value, NULL);
-            MNN_PRINT(" %d.%d Software version: %s\n", j+1, 2, value);
-            free(value);
-
-            // print c version supported by compiler for device
-            clGetDeviceInfo(devices[j], CL_DEVICE_OPENCL_C_VERSION, 0, NULL, &valueSize);
-            value = (char*) malloc(valueSize);
-            clGetDeviceInfo(devices[j], CL_DEVICE_OPENCL_C_VERSION, valueSize, value, NULL);
-            MNN_PRINT(" %d.%d OpenCL C version: %s\n", j+1, 3, value);
-            free(value);
-
-            // print parallel compute units
-            clGetDeviceInfo(devices[j], CL_DEVICE_MAX_COMPUTE_UNITS,
-                            sizeof(maxComputeUnits), &maxComputeUnits, NULL);
-            MNN_PRINT(" %d.%d Parallel compute units: %d\n", j+1, 4, maxComputeUnits);
-
-            // print work group size
-            clGetDeviceInfo(devices[j], CL_DEVICE_MAX_WORK_GROUP_SIZE ,sizeof(workGroupSize), &workGroupSize, NULL);
-            MNN_PRINT(" %d.%d Max work group size: %d\n", j+1,5, workGroupSize);
-
-            // max dimensions
-            cl_uint dimensions;
-            clGetDeviceInfo(devices[j], CL_DEVICE_MAX_WORK_ITEM_DIMENSIONS ,sizeof(dimensions), &dimensions, NULL);
-            MNN_PRINT(" %d.%d Max number of dimensions: %d\n", j+1,6, dimensions);
-
-            // max work items per dimension
-            size_t workItemsPerDimension [3];
-            clGetDeviceInfo(devices[j], CL_DEVICE_MAX_WORK_ITEM_SIZES ,sizeof(workItemsPerDimension), &workItemsPerDimension, NULL);
-            MNN_PRINT(" %d.%d number of work items per dimension: (%d,%d,%d)\n", j+1,7, workItemsPerDimension[0],workItemsPerDimension[1],workItemsPerDimension[2]);
+    std::shared_ptr <Executor> executor = Executor::getGlobalExecutor();
+    BackendConfig config;
+    executor->setGlobalExecutorConfig(MNN_FORWARD_OPENCL, config, 1);
+    std::vector<cl::Platform> platforms;
+    cl_int res = cl::Platform::get(&platforms);
+    MNN_CHECK_CL_SUCCESS(res, "getPlatform");
+    MNN_PRINT("hi");
+    cl::Device *mFirstGPUDevicePtr;
+    if(platforms.size() > 0 && res == CL_SUCCESS) {
+        cl::Platform::setDefault(platforms[0]);
+        std::vector<cl::Device> gpuDevices;
+        res = platforms[0].getDevices(CL_DEVICE_TYPE_GPU, &gpuDevices);
+        if (1 <= gpuDevices.size() && res == CL_SUCCESS) {
+            mFirstGPUDevicePtr = std::make_shared<cl::Device>(gpuDevices[0]).get();
         }
-        free(devices);
     }
-    free(platforms);
+    std::string deviceName  = mFirstGPUDevicePtr->getInfo<CL_DEVICE_NAME>();
+    uint64_t globalMemorySize = mFirstGPUDevicePtr->getInfo<CL_DEVICE_GLOBAL_MEM_SIZE>();
+    uint64_t localMemorySize = mFirstGPUDevicePtr->getInfo<CL_DEVICE_LOCAL_MEM_SIZE>();
+    uint64_t maxWorkGroupSize = mFirstGPUDevicePtr->getInfo<CL_DEVICE_MAX_WORK_GROUP_SIZE>();
+    std::vector<cl::size_type> maxWorkItemSizes = mFirstGPUDevicePtr->getInfo<CL_DEVICE_MAX_WORK_ITEM_SIZES>();
+    uint64_t maxClockFrequency = mFirstGPUDevicePtr->getInfo<CL_DEVICE_MAX_CLOCK_FREQUENCY>();
+    uint64_t computeUnits = mFirstGPUDevicePtr->getInfo<CL_DEVICE_MAX_COMPUTE_UNITS>();
+    uint64_t preferredVectorWidth = mFirstGPUDevicePtr->getInfo<CL_DEVICE_PREFERRED_VECTOR_WIDTH_FLOAT >();
+
+    MNN_PRINT("device name: %s", deviceName.c_str());
+    MNN_PRINT("global memory size: %d", globalMemorySize);
+    MNN_PRINT("local memory size: %d", localMemorySize);
+    MNN_PRINT("max work group size: %d", maxWorkGroupSize);
+    MNN_PRINT("max work item size: (%d,%d,%d)", maxWorkItemSizes[0],maxWorkItemSizes[1],maxWorkItemSizes[2]);
+    MNN_PRINT("max clock frequency: %d", maxClockFrequency);
+    MNN_PRINT("number of compute units: %d", computeUnits);
+    MNN_PRINT("preferred vector length: %d", preferredVectorWidth);
 }
 
-void kernelInfo(void){
+
+void kernelInfo(int kernelID){
     std::set <std::string> buildOptions;
     std::shared_ptr <Executor> executor = Executor::getGlobalExecutor();
     BackendConfig config;
@@ -115,28 +69,29 @@ void kernelInfo(void){
     // what is this context?
     cl::Context context = runtime->context();
     cl::CommandQueue commandQueue = runtime->commandQueue();
-    cl::Kernel kernel;
-#if KERNEL == 1
-        kernel = runtime->buildKernel("opt_gemm", "gemm1", buildOptions);
-#elif KERNEL == 2
-    kernel = runtime->buildKernel("opt_gemm", "gemm2", buildOptions);
-#elif KERNEL == 3
-    kernel = runtime->buildKernel("opt_gemm", "gemm3", buildOptions);
-#elif KERNEL == 4
-    kernel = runtime->buildKernel("opt_gemm", "gemm4", buildOptions);
-#elif KERNEL == 5
-    kernel = runtime->buildKernel("opt_gemm", "gemm5", buildOptions);
-#elif KERNEL == 6
-    kernel = runtime->buildKernel("opt_gemm", "gemm6", buildOptions);
-#endif
-    MNN_PRINT("KERNEL INFO");
+    cl::Kernel kernel = getKernelAndLaunchParameters(kernelID, runtime, 32,32).kernel;
+//    MNN_PRINT("Information for kernel %d", kernelID);
     uint64_t maxWorkGroupSize = runtime->getMaxWorkGroupSize(kernel);
-    MNN_PRINT(" Max #(work items) in work group: %d",maxWorkGroupSize);
+    MNN_PRINT("  -Max #(work items) per work group in kernel %d: %d",kernelID, maxWorkGroupSize);
+//    uint32_t deviceComputeUnits = runtime->deviceComputeUnits();
+//    std::vector<uint32_t> maxWorkItemSize = runtime->getMaxWorkItemSizes();
+//    uint64_t maxAllocSize = runtime->maxAllocSize();
+////    float flops = runtime->flops();
+//    MNN_PRINT("  Device Compute Units: %d", deviceComputeUnits);
+//    MNN_PRINT("  Mac work item size: (%d,%d,%d)", maxWorkItemSize[0], maxWorkItemSize[1], maxWorkItemSize[2]);
+//    MNN_PRINT("  Max alloc size: %d", maxAllocSize);
+////    MNN_PRINT("  flops: %f", flops);
 
-    uint64_t * globalWorkSize = runtime->getMaxGlobalWorkSize (kernel);
+//    uint64_t * globalWorkSize = runtime->getMaxGlobalWorkSize (kernel);
 //    kernel.getWorkGroupInfo(CL_KERNEL_GLOBAL_WORK_SIZE, globalWorkSize);
 //    clGetKernelWorkGroupInfo(kernel.object_, NULL, CL_KERNEL_GLOBAL_WORK_SIZE, sizeof(globalWorkSize),&globalWorkSize,NULL)
-    MNN_PRINT(" Number of work items per dimension: (%d,%d,%d)\n",globalWorkSize[0],globalWorkSize[1],globalWorkSize[2]);
+//    MNN_PRINT("  Number of work items per dimension: (%d,%d,%d)\n",globalWorkSize[0],globalWorkSize[1],globalWorkSize[2]);
+}
+
+
+void printKernelInfo(void){
+    for (int i = 0; i < 9; i++)
+        kernelInfo(i);
 }
 
 double profileCPU(int width = 32) {
@@ -151,15 +106,14 @@ double profileCPU(int width = 32) {
     CPURuntime runtime(info);
     CPUBackend backend(&runtime, config.precision);
     // A * B = C
-    float A[width][width];
-    float B[width][width];
-    float C[width][width];
-    // Initialise arrays with values.
+    float * A = new float[width * width];
+    float * B = new float[width * width];
+    float * C = new float[width * width];
     for (int i = 0; i < width; i++) {
         for (int j = 0; j < width; j++) {
-            A[i][j] = (float) (i * width + j);
-            B[i][j] = (float) (i * width + j);
-            C[i][j] = 0.0f;
+            A[i*width+j] = (float) (i * width + j);
+            B[i*width+j] = (float) (i * width + j);
+            C[i*width+j] = 0.0f;
         }
     }
 
@@ -246,15 +200,15 @@ kernelAndLaunchParameters getKernelAndLaunchParameters(int kernelID, OpenCLRunti
     }
 
     else if (kernelID == 1){
-        buildOptions.emplace("-DTS1=16 -DKERNEL=1");
+        option << "-D TS1=" << std::to_string(TS1);
+        buildOptions.emplace(option.str());
         kernel = runtime->buildKernel("opt_gemm", "gemm1", buildOptions);
         global = {height_uint, width_uint};
         local = {TS1, TS1};
     }
 
-    else if (kernelID == 2){
-        option << "-DTS3=" << std::to_string(TS2) << " -DWPT=" << std::to_string(WPT2)
-               << " -DRTS=" << std::to_string(RTS2) << " -DKERNEL=2 ";
+    else if (kernelID  == 2){
+        option << "-DTS2=" << std::to_string(TS2) << " -DWPT2=" << std::to_string(WPT2) << " -DRTS2=" << std::to_string(RTS2);
         buildOptions.emplace(option.str());
         kernel = runtime->buildKernel("opt_gemm", "gemm2", buildOptions);
 //        uint32_t globalColSize = width_uint / WPT2;
@@ -302,9 +256,9 @@ kernelAndLaunchParameters getKernelAndLaunchParameters(int kernelID, OpenCLRunti
 //                local0 = TSN4 /WPTN4,
 //                local1 = TSM4;
 //        uint32_t global0 = width,
-//                global1 = width / WPTM4,
-//                local0 = TSN4,
-//                local1 = TSM4 / WPTM4;
+//                global1 = width / WPTN4,
+//                local0 = TSM4,
+//                local1 = TSN4 / WPTN4;
 //        uint32_t global0 = width / WPTM4,
 //                global1 = width,
 //                local0 = TSM4 / WPTM4,
@@ -352,6 +306,10 @@ kernelAndLaunchParameters getKernelAndLaunchParameters(int kernelID, OpenCLRunti
                 global1 = width / WPTM6,
                 local0 = RTSN6,
                 local1 = RTSM6;
+//        uint32_t global0 = width / WPTM6,
+//                global1 = width / WPTN6,
+//                local0 = RTSM6,
+//                local1 = RTSN6;
         if (width % WPTN6 != 0)
             global1++;
         global={global0, global1};
@@ -385,7 +343,7 @@ kernelAndLaunchParameters getKernelAndLaunchParameters(int kernelID, OpenCLRunti
         option << "-DWPTN=" << std::to_string(WPTN8) << " ";
         option << "-DWPTM=" << std::to_string(WPTM8) << " ";
         option << " -DWIDTH=" << std::to_string(WIDTH8) << " ";
-        option << "-DKERNEL=7 ";
+        option << "-DKERNEL=8";
         buildOptions.emplace(option.str());
         kernel = runtime->buildKernel("opt_gemm", "gemm8", buildOptions);
         uint32_t global0 = width / WPTN8,
@@ -395,6 +353,25 @@ kernelAndLaunchParameters getKernelAndLaunchParameters(int kernelID, OpenCLRunti
         if (width % WPTN8 != 0)
             global1++;
         global={global0, global1};
+        local={local0, local1};
+    }
+    else if (kernelID == 9) {
+        option << "-DTSM=" << std::to_string(TSM8) << " ";
+        option << "-DTSN=" << std::to_string(TSN8) << " ";
+        option << "-DTSK=" << std::to_string(TSK8) << " ";
+        option << "-DWPTN=" << std::to_string(WPTN8) << " ";
+        option << "-DWPTM=" << std::to_string(WPTM8) << " ";
+        option << " -DWIDTH=" << std::to_string(WIDTH8) << " ";
+        option << "-DKERNEL=8";
+        buildOptions.emplace(option.str());
+        kernel = runtime->buildKernel("opt_gemm", "gemm8New", buildOptions);
+        uint32_t global0 = width / WPTN8,
+                global1 = width / WPTM8,
+                local0 = RTSN8,
+                local1 = RTSM8;
+        if (width % WPTN8 != 0)
+            global1++;
+        global = {global0, global1};
         local={local0, local1};
     }
 
@@ -421,7 +398,7 @@ cl::Kernel setKernelArgs(int M, int N, int K, cl::Buffer bufferA, cl::Buffer buf
 
 
 double getKernelRuntime2D(cl::Kernel kernel, std::vector<uint32_t> global, std::vector<uint32_t> local, OpenCLRuntime* runtime){
-    int warmup_steps = 10, hot_runs = 50, last_runs = 5, overall_runs =2;
+    int warmup_steps = 5, hot_runs = 10, last_runs = 2, overall_runs =1;
     int total_runs = warmup_steps + hot_runs + last_runs;
     std::vector<cl::Event> events;
     for (int k = 0; k < overall_runs; k++) {
@@ -449,7 +426,7 @@ double getKernelRuntime2D(cl::Kernel kernel, std::vector<uint32_t> global, std::
     return avg_time / (hot_runs * overall_runs);
 }
 
-double profileGPU(int width=32, int kernelID=0) {
+double profileGPU(int width, int kernelID) {
     std::shared_ptr <Executor> executor = Executor::getGlobalExecutor();
     BackendConfig config;
     Backend::Info info;
@@ -479,27 +456,36 @@ double profileGPU(int width=32, int kernelID=0) {
 //    MNN_PRINT("width and tiles: %d, %d\n",width,numTiles);
     uint32_t width_uint = (uint32_t) width;
     kernelAndLaunchParameters klp = getKernelAndLaunchParameters(kernelID, runtime, width, width);
-    float A[width][width];
-    float B[width][width];
-    float C[width][width];
+//    float A[width][width];
+    float *A = new float[width*width];
+//    float B[width][width];
+    float *B = new float[width*width];
+//    float C[width][width];
+    float *C = new float[width*width];
     // Initialise arrays with values.
     for (int i = 0; i < width; i++) {
         for (int j = 0; j < width; j++) {
           if (i < oldWidth && j < oldWidth){
-              B[i][j] = (float) (i * width + j);
+//              B[i][j] = (float) (i * width + j);
+              B[i*width+j] = (float) (i * width + j);
             if (kernelID == 4 or kernelID == 5 or kernelID == 6 or kernelID == 7){
-                A[j][i] = (float) (i * width + j);
+                // A[j][i] = (float) (i * width + j);
+                A[j*width+i] =(float) (i * width + j) ;
             }
-            // transposing B as input to kernel 5
             else{
-                A[i][j] = (float) (i * width + j);
+                // A[i][j] = (float) (i * width + j);
+                A[i*width + j] =(float) (i * width + j);
             }
-            C[i][j] = 0.0f;
+//            C[i][j] = 0.0f;
+            C[i*width+j] = 0.0f;
             }
           else{
-              A[i][j] = 0.f;
-              B[i][j] = 0.f;
-              C[i][j] = 0.f;
+              // A[i][j] = 0.f;
+              A[i*width + j] = 0.f;
+//              B[i][j] = 0.f;
+              B[i*width+j] = 0.f;
+//              C[i][j] = 0.f;
+              C[i*width+j] = 0.f;
           }
         }
     }
@@ -551,18 +537,31 @@ void gpu(int kernelID) {
     MNN_PRINT("DONE!");
 }
 
-float getKernelGLOPS(int kernelToTestID){
-    int size = 2<<8;
+double getKernelGLOPS(int kernelToTestID, int size){
     double time = profileGPU(size, kernelToTestID);
-    float res =  2 * size * size * size / time / 1e3f;
+    double res =  ((2 * size / time) / 1e3f) * size * size;
+    return res;
+
+}
+
+double getCpuGFLOPS(int size){
+    double time = profileCPU(size);
+    double res =  ((2 * size / time) / 1e3f) * size * size;
     return res;
 }
 
 void printFlops(void){
+    double cpuFLOPS = getCpuGFLOPS(1024);
+    MNN_PRINT("CPU GFLOPS: %f", cpuFLOPS);
     for (int i = 0; i < 9; i++){
-        float flops = getKernelGLOPS(i);
+        double flops = getKernelGLOPS(i, 1024);
         MNN_PRINT("Kernel %d GFLOPS: %f",i,flops);
     }
+}
+
+void kernelPerformance(int kernelToTestID){
+    float flops = getKernelGLOPS(kernelToTestID, 1024);
+    MNN_PRINT("Kernel %d GFLOPS: %f",kernelToTestID,flops);
 }
 
 
@@ -570,15 +569,11 @@ extern "C" JNIEXPORT jstring JNICALL Java_com_example_mnnconvolutionoptimisation
         JNIEnv* env,
         jobject /* this */) {
     std::string hello = "Finished.";
-#ifndef PROFILING
-    MNN_PRINT("starting");
-    gpu(33);
-#else
 //    cpu();
-    gpu(8);
-//    printFlops();
+//    gpu(8);
+    printFlops();
+//    kernelPerformance(6);
 //    deviceInfo();
-//    kernelInfo();
-#endif
+//    printKernelInfo();
     return env->NewStringUTF(hello.c_str());
 }

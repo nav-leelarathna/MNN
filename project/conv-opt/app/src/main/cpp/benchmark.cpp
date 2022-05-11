@@ -2,10 +2,11 @@
 // Created by navin on 28/04/2022.
 //
 #include "kernelDefines.h"
+#include <chrono>
 
 #define FETCH_PER_WI 16
 #define WORK_PER_WI (2<<13)
-#define MAX_LOCAL_SIZE 256
+#define MAX_LOCAL_SIZE 1024
 
 using namespace MNN;
 using namespace MNN::Express;
@@ -16,9 +17,11 @@ double getKernelRuntime1D(cl::Kernel kernel, int global, int local, OpenCLRuntim
     globalSize = global;
     localSize = local;
     cl::CommandQueue queue = runtime->commandQueue();
-    int warmup_steps = 10, hot_runs = 50, last_runs = 5, overall_runs =2;
+    int warmup_steps = 5, hot_runs = 10, last_runs = 2, overall_runs =2;
     int total_runs = warmup_steps + hot_runs + last_runs;
     std::vector<cl::Event> events;
+    double CPU_totalTime;
+    std::chrono::steady_clock::time_point t;
     for (int k = 0; k < overall_runs; k++) {
         // warmup
         std::cout << "warmup\n";
@@ -29,6 +32,7 @@ double getKernelRuntime1D(cl::Kernel kernel, int global, int local, OpenCLRuntim
 //            runKernel2D(kernel, global, local, runtime, nullptr);
         // hot runs
         std::cout << "hot runs\n";
+        t = std::chrono::steady_clock::now();
         for (int i = 0; i < hot_runs; i++){
             cl::Event event;
 //            runKernel2D(kernel, global, local, runtime, &event);
@@ -36,7 +40,9 @@ double getKernelRuntime1D(cl::Kernel kernel, int global, int local, OpenCLRuntim
             queue.enqueueNDRangeKernel(kernel, cl::NullRange, globalSize, localSize, NULL, &event);
             queue.finish();
             events.push_back(event);
-        };
+        }
+        double diff = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - t).count();
+        CPU_totalTime += diff;
         // cool down runs, what is the point of this?
         for (int i = 0; i < last_runs; i++){
             queue.enqueueNDRangeKernel(kernel, cl::NullRange, globalSize, localSize);
@@ -49,7 +55,8 @@ double getKernelRuntime1D(cl::Kernel kernel, int global, int local, OpenCLRuntim
 //        MNN_PRINT("%f\n",time);
         avg_time += time;
     }
-    return avg_time / (hot_runs * overall_runs);
+    // return avg_time / (hot_runs * overall_runs);
+    return CPU_totalTime/(hot_runs * overall_runs);
 }
 
 float getMemoryBandwidth(int floatWidth=1){
@@ -61,7 +68,7 @@ float getMemoryBandwidth(int floatWidth=1){
     info.gpuMode = MNN_GPU_TUNING_WIDE | MNN_GPU_MEMORY_BUFFER;
     info.mode = Backend::Info::DIRECT;
     info.user = (BackendConfig * ) & config;
-    info.numThread = 1;
+    info.numThread = 4;
     // int the below function numThreads gets set to 4 if type is MNN_FORWARD_OPENCL
     executor->setGlobalExecutorConfig(info.type, config, info.numThread);
     // what is this runtime?
@@ -74,8 +81,9 @@ float getMemoryBandwidth(int floatWidth=1){
     cl::Context context = runtime->context();
     cl::CommandQueue commandQueue = runtime->commandQueue();
 
-    int numItems = FETCH_PER_WI * MAX_LOCAL_SIZE * 2<<6;
-    float arr[numItems];
+    int numItems = FETCH_PER_WI * MAX_LOCAL_SIZE * 16;
+    // float arr[numItems];
+    float * arr = new float[numItems];
     for (int i = 0 ; i < numItems; i++){
         arr[i] = (float)i;
     }
@@ -97,10 +105,12 @@ float getMemoryBandwidth(int floatWidth=1){
     MNN_CHECK_CL_SUCCESS(res, "setting args");
 
     uint32_t maxLocalSize = MAX_LOCAL_SIZE;
-    uint32_t globalSize = numItems / FETCH_PER_WI / floatWidth;
+     uint32_t globalSize = numItems / FETCH_PER_WI / floatWidth;
+//    uint32_t globalSize = 4096;
 
     double timeToRun = getKernelRuntime1D(kernel, globalSize, maxLocalSize, runtime);
-    float gbps = ((float)numItems * sizeof(float)) / timeToRun / 1e3f;
+    float gbps = (((float)numItems * sizeof(float)) / timeToRun) / 1e3f;
+//    float gbps = (((float)globalSize * sizeof(float)) / timeToRun) / 1e3f;
     return gbps;
 }
 
@@ -146,12 +156,14 @@ float getFlops(int floatWidth){
 }
 
 void benchmark(){
+//    float gbps_0 = getMemoryBandwidth(0);
     float gbps_1 = getMemoryBandwidth(1);
     float gbps_2 = getMemoryBandwidth(2);
     float gbps_4 = getMemoryBandwidth(4);
     float gbps_8 = getMemoryBandwidth(8);
     float gbps_16 = getMemoryBandwidth(16);
     MNN_PRINT("Global memory bandwidth (GBPS)");
+//    MNN_PRINT("  float0 : %f", gbps_0);
     MNN_PRINT("  float   : %f", gbps_1);
     MNN_PRINT("  float2  : %f", gbps_2);
     MNN_PRINT("  float4  : %f", gbps_4);

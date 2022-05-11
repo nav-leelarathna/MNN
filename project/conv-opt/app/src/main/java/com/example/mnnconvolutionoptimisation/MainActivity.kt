@@ -17,10 +17,10 @@ class MainActivity : AppCompatActivity() {
 
         // Example of a call to a native method
 //        binding.sampleText.text = profileNN()
-//        binding.sampleText.text = profileKernel()
+        binding.sampleText.text = profileKernel()
+//        binding.sampleText.text = functionalityTest()
 //        binding.sampleText.text = benchmark()
 //        binding.sampleText.text = deviceInformation()
-        binding.sampleText.text = functionalityTest()
 //        binding.sampleText.text = testConvolution ()
 
     }
@@ -30,7 +30,6 @@ class MainActivity : AppCompatActivity() {
      * which is packaged with this application.
      */
 //    external fun stringFromJNI(): String
-    external fun profileNN(): String
     external fun profileKernel(): String
     external fun testConvolution(): String
     external fun functionalityTest(): String

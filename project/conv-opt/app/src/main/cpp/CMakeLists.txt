@@ -22,7 +22,7 @@ file(GLOB MODELS ${TRAIN_SOURCE}/models/*)
 file(GLOB DATASET ${TRAIN_SOURCE}/datasets/*)
 file(GLOB DEMOSOURCE ${TRAIN_SOURCE}/demo/*)
 file(GLOB NNFILES ${TRAIN_SOURCE}/nn/*)
-set(MNN_JNI_SRCS mnn_jni.cpp kernelProfiling.cpp convolutionTest.cpp functionalityTests.cpp benchmark.cpp deviceInformation.cpp ${GRAD} ${OPT} ${TRANS} ${DATA} ${MODELS} ${DATASET} ${DEMOSOURCE} ${NNFILES})
+set(MNN_JNI_SRCS kernelProfiling.cpp convolutionTest.cpp functionalityTests.cpp benchmark.cpp deviceInformation.cpp ${GRAD} ${OPT} ${TRANS} ${DATA} ${MODELS} ${DATASET} ${DEMOSOURCE} ${NNFILES})
 # Declares and names the project.
 
 project("mnnconvolutionoptimisation")
