@@ -8,91 +8,6 @@ using namespace MNN;
 using namespace MNN::Express;
 using namespace MNN::OpenCL;
 
-#define PROFILING
-//#define LOG_VERBOSE
-
-
-void deviceInfo(void){
-    std::shared_ptr <Executor> executor = Executor::getGlobalExecutor();
-    BackendConfig config;
-    executor->setGlobalExecutorConfig(MNN_FORWARD_OPENCL, config, 1);
-    std::vector<cl::Platform> platforms;
-    cl_int res = cl::Platform::get(&platforms);
-    MNN_CHECK_CL_SUCCESS(res, "getPlatform");
-    MNN_PRINT("hi");
-    cl::Device *mFirstGPUDevicePtr;
-    if(platforms.size() > 0 && res == CL_SUCCESS) {
-        cl::Platform::setDefault(platforms[0]);
-        std::vector<cl::Device> gpuDevices;
-        res = platforms[0].getDevices(CL_DEVICE_TYPE_GPU, &gpuDevices);
-        if (1 <= gpuDevices.size() && res == CL_SUCCESS) {
-            mFirstGPUDevicePtr = std::make_shared<cl::Device>(gpuDevices[0]).get();
-        }
-    }
-    std::string deviceName  = mFirstGPUDevicePtr->getInfo<CL_DEVICE_NAME>();
-    uint64_t globalMemorySize = mFirstGPUDevicePtr->getInfo<CL_DEVICE_GLOBAL_MEM_SIZE>();
-    uint64_t localMemorySize = mFirstGPUDevicePtr->getInfo<CL_DEVICE_LOCAL_MEM_SIZE>();
-    uint64_t maxWorkGroupSize = mFirstGPUDevicePtr->getInfo<CL_DEVICE_MAX_WORK_GROUP_SIZE>();
-    std::vector<cl::size_type> maxWorkItemSizes = mFirstGPUDevicePtr->getInfo<CL_DEVICE_MAX_WORK_ITEM_SIZES>();
-    uint64_t maxClockFrequency = mFirstGPUDevicePtr->getInfo<CL_DEVICE_MAX_CLOCK_FREQUENCY>();
-    uint64_t computeUnits = mFirstGPUDevicePtr->getInfo<CL_DEVICE_MAX_COMPUTE_UNITS>();
-    uint64_t preferredVectorWidth = mFirstGPUDevicePtr->getInfo<CL_DEVICE_PREFERRED_VECTOR_WIDTH_FLOAT >();
-
-    MNN_PRINT("device name: %s", deviceName.c_str());
-    MNN_PRINT("global memory size: %d", globalMemorySize);
-    MNN_PRINT("local memory size: %d", localMemorySize);
-    MNN_PRINT("max work group size: %d", maxWorkGroupSize);
-    MNN_PRINT("max work item size: (%d,%d,%d)", maxWorkItemSizes[0],maxWorkItemSizes[1],maxWorkItemSizes[2]);
-    MNN_PRINT("max clock frequency: %d", maxClockFrequency);
-    MNN_PRINT("number of compute units: %d", computeUnits);
-    MNN_PRINT("preferred vector length: %d", preferredVectorWidth);
-}
-
-
-void kernelInfo(int kernelID){
-    std::set <std::string> buildOptions;
-    std::shared_ptr <Executor> executor = Executor::getGlobalExecutor();
-    BackendConfig config;
-    Backend::Info info;
-    info.type = MNN_FORWARD_OPENCL;
-    // What do these modes do?
-    info.gpuMode = MNN_GPU_TUNING_WIDE | MNN_GPU_MEMORY_BUFFER;
-    info.mode = Backend::Info::DIRECT;
-    info.user = (BackendConfig * ) & config;
-    info.numThread = 1;
-    // int the below function numThreads gets set to 4 if type is MNN_FORWARD_OPENCL so no point changing it
-    executor->setGlobalExecutorConfig(info.type, config, info.numThread);
-    OpenCLRuntime runtime_(config.precision, info.gpuMode);
-    OpenCLRuntime *runtime = &runtime_;
-    // What is this command queue?
-    runtime->setCommandQueueProfileEnable();
-    // what is this context?
-    cl::Context context = runtime->context();
-    cl::CommandQueue commandQueue = runtime->commandQueue();
-    cl::Kernel kernel = getKernelAndLaunchParameters(kernelID, runtime, 32,32).kernel;
-//    MNN_PRINT("Information for kernel %d", kernelID);
-    uint64_t maxWorkGroupSize = runtime->getMaxWorkGroupSize(kernel);
-    MNN_PRINT("  -Max #(work items) per work group in kernel %d: %d",kernelID, maxWorkGroupSize);
-//    uint32_t deviceComputeUnits = runtime->deviceComputeUnits();
-//    std::vector<uint32_t> maxWorkItemSize = runtime->getMaxWorkItemSizes();
-//    uint64_t maxAllocSize = runtime->maxAllocSize();
-////    float flops = runtime->flops();
-//    MNN_PRINT("  Device Compute Units: %d", deviceComputeUnits);
-//    MNN_PRINT("  Mac work item size: (%d,%d,%d)", maxWorkItemSize[0], maxWorkItemSize[1], maxWorkItemSize[2]);
-//    MNN_PRINT("  Max alloc size: %d", maxAllocSize);
-////    MNN_PRINT("  flops: %f", flops);
-
-//    uint64_t * globalWorkSize = runtime->getMaxGlobalWorkSize (kernel);
-//    kernel.getWorkGroupInfo(CL_KERNEL_GLOBAL_WORK_SIZE, globalWorkSize);
-//    clGetKernelWorkGroupInfo(kernel.object_, NULL, CL_KERNEL_GLOBAL_WORK_SIZE, sizeof(globalWorkSize),&globalWorkSize,NULL)
-//    MNN_PRINT("  Number of work items per dimension: (%d,%d,%d)\n",globalWorkSize[0],globalWorkSize[1],globalWorkSize[2]);
-}
-
-
-void printKernelInfo(void){
-    for (int i = 0; i < 9; i++)
-        kernelInfo(i);
-}
 
 double profileCPU(int width = 32) {
     std::shared_ptr <Executor> executor = Executor::getGlobalExecutor();
@@ -105,7 +20,6 @@ double profileCPU(int width = 32) {
 
     CPURuntime runtime(info);
     CPUBackend backend(&runtime, config.precision);
-    // A * B = C
     float * A = new float[width * width];
     float * B = new float[width * width];
     float * C = new float[width * width];
@@ -121,27 +35,19 @@ double profileCPU(int width = 32) {
     Tensor *tensorA = Tensor::create<float>(shape, A);
     Tensor *tensorB = Tensor::create<float>(shape, B);
     Tensor *tensorC = Tensor::create<float>(shape, C);
-
     Timer timer;
 
     std::vector < Tensor * > inputs({tensorA, tensorB}), outputs({tensorC});
-    // What is this doing?
     CPUMatMul matmul(&backend, false, false, false, false);
-    // What is this mode?
     MNNSetCPUThreadsMode(MNN_CPU_MODE_BIG);
-    // What does onResize do?
     matmul.onResize(inputs, outputs);
 
-    // executing matrix multiplication and averaging over multiple runs.
-    // Allow some runs to "warmup" that do not contribute to the average
-    // time.
-    int warmup = 10, hot_runs = 50, overall = 2;
+    int warmup = 10, hot_runs = HOT_RUNS, overall = 2;
     double avg_time = 0.f;
     for (int k = 0; k < overall; k++) {
         for (int i = 0; i < warmup; i++) {
             matmul.onExecute(inputs, outputs);
         }
-
         timer.reset();
         for (int i = 0; i < hot_runs; i++) {
             matmul.onExecute(inputs, outputs);
@@ -152,35 +58,6 @@ double profileCPU(int width = 32) {
     return avg_time / (hot_runs * overall);
 }
 
-
-void prepareWidthAndTiles(int& width, int& numTiles, int kernel){
-    if (kernel == 2){
-        numTiles = width / TS2;
-        if (width % TS2 != 0)
-            numTiles++;
-        width = numTiles * TS2;
-    }
-
-    else if(kernel == 3){
-        numTiles = width / TS3;
-        if (width % TS3 != 0)
-            numTiles++;
-        width = numTiles * TS3;
-    }
-    else if (kernel == 4){
-        numTiles = width / TSM4;
-        if (width % TSM4 != 0)
-            numTiles++;
-        width = numTiles * TSM4;
-    }
-    else if (kernel == 5){
-        int temp = width / TSM5;
-        if (width % TSM5 != 0)
-            temp++;
-        width = temp * TSM5;
-        numTiles = width / TSK5;
-    }
-}
 
 
 kernelAndLaunchParameters getKernelAndLaunchParameters(int kernelID, OpenCLRuntime* runtime, int height, int width){
@@ -355,25 +232,6 @@ kernelAndLaunchParameters getKernelAndLaunchParameters(int kernelID, OpenCLRunti
         global={global0, global1};
         local={local0, local1};
     }
-    else if (kernelID == 9) {
-        option << "-DTSM=" << std::to_string(TSM8) << " ";
-        option << "-DTSN=" << std::to_string(TSN8) << " ";
-        option << "-DTSK=" << std::to_string(TSK8) << " ";
-        option << "-DWPTN=" << std::to_string(WPTN8) << " ";
-        option << "-DWPTM=" << std::to_string(WPTM8) << " ";
-        option << " -DWIDTH=" << std::to_string(WIDTH8) << " ";
-        option << "-DKERNEL=8";
-        buildOptions.emplace(option.str());
-        kernel = runtime->buildKernel("opt_gemm", "gemm8New", buildOptions);
-        uint32_t global0 = width / WPTN8,
-                global1 = width / WPTM8,
-                local0 = RTSN8,
-                local1 = RTSM8;
-        if (width % WPTN8 != 0)
-            global1++;
-        global = {global0, global1};
-        local={local0, local1};
-    }
 
     klp.kernel = kernel;
     klp.global = global;
@@ -398,7 +256,7 @@ cl::Kernel setKernelArgs(int M, int N, int K, cl::Buffer bufferA, cl::Buffer buf
 
 
 double getKernelRuntime2D(cl::Kernel kernel, std::vector<uint32_t> global, std::vector<uint32_t> local, OpenCLRuntime* runtime){
-    int warmup_steps = 5, hot_runs = 10, last_runs = 2, overall_runs =1;
+    int warmup_steps = 5, hot_runs = HOT_RUNS, last_runs = 2, overall_runs =1;
     int total_runs = warmup_steps + hot_runs + last_runs;
     std::vector<cl::Event> events;
     for (int k = 0; k < overall_runs; k++) {
@@ -413,80 +271,56 @@ double getKernelRuntime2D(cl::Kernel kernel, std::vector<uint32_t> global, std::
             runKernel2D(kernel, global, local, runtime, &event);
             events.push_back(event);
         };
-        // cool down runs, what is the point of this?
         for (int i = 0; i < last_runs; i++)
             runKernel2D(kernel, global, local, runtime, nullptr);
     }
     double avg_time = 0.0f;
+//    std::stringstream option;
     for (cl::Event event : events){
         double time = runtime->getCostTime(&event);
 //        MNN_PRINT("%f\n",time);
+//        double gflops = ((2 * 1024 / time) / 1e3f) * 1024 * 1024;
+//        option << std::to_string(gflops) << ", ";
         avg_time += time;
     }
+//    MNN_PRINT("%s", option.str().c_str());
     return avg_time / (hot_runs * overall_runs);
 }
 
-double profileGPU(int width, int kernelID) {
+double profileKernelOnGPU(int width, int kernelID) {
     std::shared_ptr <Executor> executor = Executor::getGlobalExecutor();
     BackendConfig config;
     Backend::Info info;
     info.type = MNN_FORWARD_OPENCL;
-    // What do these modes do?
     info.gpuMode = MNN_GPU_TUNING_WIDE | MNN_GPU_MEMORY_BUFFER;
     info.mode = Backend::Info::DIRECT;
     info.user = (BackendConfig * ) & config;
     info.numThread = 1;
-    // int the below function numThreads gets set to 4 if type is MNN_FORWARD_OPENCL
     executor->setGlobalExecutorConfig(info.type, config, info.numThread);
-    // what is this runtime?
-//    MNN_PRINT("setting runtime\n");
     OpenCLRuntime runtime_(config.precision, info.gpuMode);
     OpenCLRuntime *runtime = &runtime_;
-    // What is this command queue?
     runtime->setCommandQueueProfileEnable();
-    // what is this context?
     cl::Context context = runtime->context();
     cl::CommandQueue commandQueue = runtime->commandQueue();
 
     std::set <std::string> buildOptions;
     std::stringstream option;
-    int oldWidth = width;
-    int numTiles;
-    prepareWidthAndTiles(width, numTiles, kernelID);
-//    MNN_PRINT("width and tiles: %d, %d\n",width,numTiles);
     uint32_t width_uint = (uint32_t) width;
     kernelAndLaunchParameters klp = getKernelAndLaunchParameters(kernelID, runtime, width, width);
-//    float A[width][width];
     float *A = new float[width*width];
-//    float B[width][width];
     float *B = new float[width*width];
-//    float C[width][width];
     float *C = new float[width*width];
-    // Initialise arrays with values.
     for (int i = 0; i < width; i++) {
         for (int j = 0; j < width; j++) {
-          if (i < oldWidth && j < oldWidth){
-//              B[i][j] = (float) (i * width + j);
-              B[i*width+j] = (float) (i * width + j);
-            if (kernelID == 4 or kernelID == 5 or kernelID == 6 or kernelID == 7){
-                // A[j][i] = (float) (i * width + j);
-                A[j*width+i] =(float) (i * width + j) ;
-            }
-            else{
-                // A[i][j] = (float) (i * width + j);
-                A[i*width + j] =(float) (i * width + j);
-            }
-//            C[i][j] = 0.0f;
-            C[i*width+j] = 0.0f;
-            }
-          else{
-              // A[i][j] = 0.f;
-              A[i*width + j] = 0.f;
-//              B[i][j] = 0.f;
-              B[i*width+j] = 0.f;
-//              C[i][j] = 0.f;
-              C[i*width+j] = 0.f;
-          }
+          B[i*width+j] = (float) (i * width + j);
+        if (kernelID == 4 or kernelID == 5 or kernelID == 6 or kernelID == 7){
+            A[j*width+i] =(float) (i * width + j) ;
+        }
+        else{
+            A[i*width + j] =(float) (i * width + j);
+        }
+        C[i*width+j] = 0.0f;
+
         }
     }
     cl_mem_flags flags = CL_MEM_READ_WRITE | CL_MEM_USE_HOST_PTR;
@@ -500,8 +334,7 @@ double profileGPU(int width, int kernelID) {
 }
 
 
-
-void cpu(void){
+void getCPUExecutionTimes(void){
     int starting = 0;
     int start = starting/32 + 1; //, offset = 15;
     std::stringstream output;
@@ -520,7 +353,7 @@ void cpu(void){
     MNN_PRINT("DONE!");
 }
 
-void gpu(int kernelID) {
+void getGPUExecutionTimes(int kernelID) {
     MNN_PRINT("Running kernel %d on GPU", kernelID);
     int starting = 0;
     std::stringstream output;
@@ -528,20 +361,12 @@ void gpu(int kernelID) {
     int limit = LIMIT;
     for (int i = start; i<=limit; i++) {
         int mat_size = i*32;
-        double time = profileGPU(mat_size, kernelID);
-//        MNN_PRINT("%d-> %f", mat_size, time);
+        double time = profileKernelOnGPU(mat_size, kernelID);
         output << std::to_string(time) << ",";
     }
 
     MNN_PRINT("%s", output.str().c_str());
     MNN_PRINT("DONE!");
-}
-
-double getKernelGLOPS(int kernelToTestID, int size){
-    double time = profileGPU(size, kernelToTestID);
-    double res =  ((2 * size / time) / 1e3f) * size * size;
-    return res;
-
 }
 
 double getCpuGFLOPS(int size){
@@ -550,18 +375,23 @@ double getCpuGFLOPS(int size){
     return res;
 }
 
-void printFlops(void){
+double getKernelGFLOPS(int kernelToTestID, int size){
+    double time = profileKernelOnGPU(size, kernelToTestID);
+    double res =  ((2 * size / time) / 1e3f) * size * size;
+    return res;
+}
+
+void printKernelPerformance(int kernelToTestID){
+    double flops = getKernelGFLOPS(kernelToTestID, 1024);
+    MNN_PRINT("Kernel %d GFLOPS: %f",kernelToTestID,flops);
+}
+
+void printAllFlops(void){
     double cpuFLOPS = getCpuGFLOPS(1024);
     MNN_PRINT("CPU GFLOPS: %f", cpuFLOPS);
     for (int i = 0; i < 9; i++){
-        double flops = getKernelGLOPS(i, 1024);
-        MNN_PRINT("Kernel %d GFLOPS: %f",i,flops);
+        printKernelPerformance(i);
     }
-}
-
-void kernelPerformance(int kernelToTestID){
-    float flops = getKernelGLOPS(kernelToTestID, 1024);
-    MNN_PRINT("Kernel %d GFLOPS: %f",kernelToTestID,flops);
 }
 
 
@@ -569,11 +399,9 @@ extern "C" JNIEXPORT jstring JNICALL Java_com_example_mnnconvolutionoptimisation
         JNIEnv* env,
         jobject /* this */) {
     std::string hello = "Finished.";
-//    cpu();
-//    gpu(8);
-    printFlops();
-//    kernelPerformance(6);
-//    deviceInfo();
-//    printKernelInfo();
+//    getCPUExecutionTimes();
+//    getGPUExecutionTimes(8);
+    printAllFlops();
+//    printKernelPerformance(4);
     return env->NewStringUTF(hello.c_str());
 }

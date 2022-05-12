@@ -5,6 +5,8 @@
 #ifndef MNN_CONVOLUTION_OPTIMISATION_KERNELDEFINES_H
 #define MNN_CONVOLUTION_OPTIMISATION_KERNELDEFINES_H
 
+#define NUM_KERNELS 8
+#define HOT_RUNS 50
 
 #include <jni.h>
 #include <string>
@@ -59,7 +61,7 @@
 //#define TSN4 64                 // The tile-size in dimension N
 //#define TSK4 32                 // The tile-size in dimension K
 #define WPTN4 1                 // The work-per-thread in dimension N
-#define WPTM4 8
+#define WPTM4 1
 #if WPTM4 == 1
 #define TSM4 16
 #elif WPTM4 == 2

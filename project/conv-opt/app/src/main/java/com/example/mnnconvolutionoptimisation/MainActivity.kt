@@ -17,9 +17,9 @@ class MainActivity : AppCompatActivity() {
 
         // Example of a call to a native method
 //        binding.sampleText.text = profileNN()
-        binding.sampleText.text = profileKernel()
+//        binding.sampleText.text = profileKernel()
 //        binding.sampleText.text = functionalityTest()
-//        binding.sampleText.text = benchmark()
+        binding.sampleText.text = benchmark()
 //        binding.sampleText.text = deviceInformation()
 //        binding.sampleText.text = testConvolution ()
 

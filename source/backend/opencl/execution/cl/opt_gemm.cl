@@ -126,8 +126,6 @@ __kernel void gemm2(const int M, const int N, const int K,
 }
 
 
-
-// #define TS3 16
 #define WIDTH3 4
 #if WIDTH3 == 1
     typedef float floatX;
@@ -254,11 +252,8 @@ __global floatX* C) {
 }
 
 
-//#define TSM4 64                 // The tile-size in dimension M
-//#define TSN4 64                 // The tile-size in dimension N
-//#define TSK4 32                 // The tile-size in dimension K
 #define WPTN4 1                // The work-per-thread in dimension N
-#define WPTM4 8
+#define WPTM4 1
 
 #if WPTM4 == 1
     #define TSM4 16
@@ -329,61 +324,6 @@ __kernel void gemm4(const int M, const int N, const int K,
         C[(globalRow + w * RTSM4) * N + globalCol] = acc[w];
     }
 }
-
-__kernel void gemm4Old(const int N, const int M, const int K,
-                      const __global float* B,
-                      const __global float* A,
-                      __global float* C) {
-
-    // Thread identifiers
-    const int row = get_local_id(0); // Local row ID (max: TSM)
-    const int col = get_local_id(1); // Local col ID (max: TSN/WPTN)
-    const int globalRow = TSM4*get_group_id(0) + row; // 0..M
-    const int globalCol = TSN4*get_group_id(1) + col; // 0..N
-
-    // Local memory to fit a tile of A and B
-    __local float Asub[TSK4][TSM4];
-    __local float Bsub[TSN4][TSK4];
-
-    // Initialise the accumulation registers
-    float acc[WPTN4];
-    for (int w=0; w<WPTN4; w++) {
-        acc[w] = 0.0f;
-    }
-
-    // Loop over all tiles
-    int numTiles = K/TSK4;
-    for (int t=0; t<numTiles; t++) {
-
-        // Load one tile of A and B into local memory
-        for (int l=0; l<LPT4; l++) {
-            int tiledIndex = TSK4*t + col + l*RTSN4;
-            int indexA = tiledIndex*M + TSM4*get_group_id(0) + row;
-            int indexB = tiledIndex*N + TSN4*get_group_id(1) + row;
-            Asub[col + l*RTSN4][row] = A[indexA];
-            Bsub[row][col + l*RTSN4] = B[indexB];
-       }
-
-        // Synchronise to make sure the tile is loaded
-        barrier(CLK_LOCAL_MEM_FENCE);
-
-        // Perform the computation for a single tile
-        for (int k=0; k<TSK4; k++) {
-            for (int w=0; w<WPTN4; w++) {
-                acc[w] += Asub[k][row] * Bsub[col + w*RTSN4][k];
-            }
-        }
-
-        // Synchronise before loading the next tile
-        barrier(CLK_LOCAL_MEM_FENCE);
-    }
-
-    // Store the final results in C
-    for (int w=0; w<WPTN4; w++) {
-        C[(globalCol + w*RTSN4)*M + globalRow] = acc[w];
-    }
-}
-
 
 
 #define TSM5 64
